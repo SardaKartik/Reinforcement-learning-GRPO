@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data / model artifacts (can be large — keep repo lightweight)
+# The GSM8K splits are loaded from the Hugging Face dataset repo, not from git.
+data/splits/
+data/*.jsonl
+*.jsonl
+checkpoints/
+*.bin
+*.safetensors
+
+# OS
+.DS_Store
+Thumbs.db

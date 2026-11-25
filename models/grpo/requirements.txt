@@ -1,0 +1,7 @@
+# GRPO training dependencies (install on the RunPod Pod, Linux + GPU).
+# trl[vllm] pulls in vLLM, which GRPO uses for fast generation.
+# Versions are not pinned yet. After the smoke test passes, record the exact
+# versions here (from: pip freeze | grep -iE "^(trl|vllm|peft|datasets|torch|transformers)==") so the full run is reproducible.
+trl[vllm]
+peft
+datasets
