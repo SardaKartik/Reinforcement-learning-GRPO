@@ -10,6 +10,7 @@ All settings, and the reason for each, are in models/grpo/grpo-hyperparameters.m
 import argparse
 import os
 
+import torch
 from datasets import load_dataset
 from huggingface_hub import login
 from peft import LoraConfig
@@ -183,8 +184,23 @@ def run_training(max_steps,push,smoke,resume = None):
     #   which is normal. If you see ONLY float32, the "dtype" key was ignored.
     print("model dtypes:", {p.dtype for p in trainer.model.parameters()})
 
+    # GRADIENT CHECKPOINTING CHECK: is the memory saver actually on?
+    # We do not set it ourselves; this prints the value TRL really uses.
+    #   True  -> on (TRL's documented default). Nothing to do.
+    #   False -> off. Layer memory is then large; consider setting
+    #            gradient_checkpointing=True in make_grpo_config.
+    print("gradient checkpointing:", trainer.args.gradient_checkpointing)
+
     # The actual training. resume=None starts fresh.
     trainer.train(resume_from_checkpoint=resume)
+
+    # PEAK GPU MEMORY (this process, in GB). Use it to check the VRAM estimate and
+    # for the project's memory comparison. It may not include the block vLLM
+    # reserved for itself, so also watch `nvidia-smi` in a second terminal.
+    if torch.cuda.is_available():
+        gb = 1024 ** 3
+        print(f"peak GPU memory allocated: {torch.cuda.max_memory_allocated() / gb:.2f} GB")
+        print(f"peak GPU memory reserved : {torch.cuda.max_memory_reserved() / gb:.2f} GB")
 
     # Save the final LoRA adapter to the Pod's disk (/workspace survives a stop).
     final_dir = f"{OUTPUT_DIR}/final"
