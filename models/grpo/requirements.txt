@@ -1,7 +1,12 @@
 # GRPO training dependencies (install on the RunPod Pod, Linux + GPU).
 # trl[vllm] pulls in vLLM, which GRPO uses for fast generation.
-# Versions are not pinned yet. After the smoke test passes, record the exact
-# versions here (from: pip freeze | grep -iE "^(trl|vllm|peft|datasets|torch|transformers)==") so the full run is reproducible.
-trl[vllm]
-peft
-datasets
+#
+# Versions are pinned to the exact set that passed the smoke test on an A40
+# (CUDA 13.2 driver, Python 3.12.3, Ubuntu 24.04). torch 2.14.0 is not listed
+# because vllm 0.34.0 brings its own matching torch.
+# Install in a fresh venv, not into the template's own PyTorch.
+trl[vllm]==1.19.0
+vllm==0.34.0
+peft==0.22.0
+datasets==5.2.0
+transformers==5.22.2
