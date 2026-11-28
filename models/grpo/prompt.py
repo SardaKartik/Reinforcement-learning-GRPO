@@ -93,23 +93,32 @@
 #    prompt from eval/accuracy.py.
 #
 # -----------------------------------------------------------------------------
-# RE-MEASURE THE BASE MODEL UNDER THIS PROMPT (required)
+# THE BASE MODEL UNDER THIS PROMPT (the baseline for GRPO)
 # -----------------------------------------------------------------------------
 #
 # The 42.15% baseline (benchmark(0)) was measured with the OLD "####" prompt,
-# so it is NOT comparable to a GRPO model evaluated with THIS prompt. Before
-# claiming any GRPO improvement we must measure the BASE model's accuracy
-# again with exactly this prompt, on the same split and with the same
-# decoding (greedy for the final benchmark), and compare GRPO against THAT
-# number.
+# so it is NOT comparable to a GRPO model evaluated with THIS prompt. GRPO is
+# therefore compared against the BASE model measured with exactly this prompt,
+# on the same split, with the same decoding (greedy) and the same token limit
+# (1,024 new tokens, the limit used in training).
 #
-# Report, for the base model (and later SFT / distilled / GRPO):
-#   - accuracy under THIS prompt (the new baseline: "benchmark(0) under B"),
-#   - accuracy under the old "####" prompt (already measured: 42.15% on test),
-#   - the format rate and the loose-vs-strict accuracy gap, so we can see how
-#     much comes from following the format vs solving the problem.
-# Do this on the VALIDATION split first for any decision; touch the TEST split
-# only for the final reported numbers.
+# STATUS: eval/accuracy.py now supports this prompt (PROMPT_STYLE =
+# "think_boxed") and reads answers with the same rule as rewards.py. The runs
+# themselves (base, then the GRPO pilot adapter, on the test split) are
+# pending; results are recorded in docs/results.md.
+#
+# Reported for each model:
+#   - accuracy under THIS prompt,
+#   - strict accuracy (right AND full format), format rate and boxed rate, so
+#     we can see how much comes from following the format vs solving the
+#     problem,
+#   - for reference only, the old "####" numbers (42.15% base, 33.66% SFT on
+#     test), which stay in a separate group because they used a different
+#     prompt.
+# Split plan: the base-vs-pilot comparison and the final models use the TEST
+# split (the same test set serves more than one GRPO model, which must be
+# stated in the report). The VALIDATION split is planned to be passed to the
+# trainer in the next GRPO run, to monitor progress during training.
 #
 # -----------------------------------------------------------------------------
 # RULES (decided in discussion — keep following them)
@@ -122,27 +131,30 @@
 #   Report every model x prompt combination.
 # - If we ever want to tune the prompt wording, compare options on the
 #   VALIDATION split, never the test set, and decide before touching test.
-# - The answer extractor in eval/accuracy.py currently reads "#### <number>".
-#   It needs a matching "think + boxed" prompt style and \boxed{} extraction.
-#   Not done yet.
+# - eval/accuracy.py has a matching "think_boxed" prompt style and \boxed{}
+#   extraction. Its copy of the prompt text and answer rules must stay
+#   identical to this file and to rewards.py; change them together.
 #
 # -----------------------------------------------------------------------------
-# TODO (not done yet)
+# STATUS / TODO
 # -----------------------------------------------------------------------------
 #
 # [x] Finalize and lock the prompt wording (Option B).
-# [ ] Add a matching "think_boxed" prompt style and \boxed{} extraction to
-#     eval/accuracy.py.
-# [ ] Re-run the BASE model benchmark under this prompt (validation first,
-#     then test for the final number) = new baseline.
+# [x] Add a matching "think_boxed" prompt style and \boxed{} extraction to
+#     eval/accuracy.py (done; also reports strict accuracy, format rate,
+#     boxed rate, mean length and truncated rate).
+# [ ] Run the BASE model under this prompt on the test split = the baseline
+#     for GRPO, then the GRPO pilot adapter on the same split. Pending
+#     (Kaggle).
 # [x] Write the GRPO reward function: separate correctness check (reads
 #     \boxed{} or last number, independent of tags) and format check
 #     (<think>...</think> then \boxed{}), weights 1.0 and 0.2.
 #     DONE: models/grpo/rewards.py (13 test cases pass).
 # [x] Turn the prompt into code (PROMPT_TEMPLATE / build_prompt /
 #     build_messages, below) so training and eval share one source of truth.
-# [ ] Count tag rates separately in future tests: <think> open, </think>
-#     close, and \boxed{} each on their own.
+# [~] Count tag rates separately: eval/accuracy.py now reports the full
+#     format rate and the \boxed{} rate separately. The <think> open and
+#     </think> close rates on their own are not counted yet.
 
 
 # =============================================================================

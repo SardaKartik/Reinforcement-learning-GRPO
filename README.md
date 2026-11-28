@@ -22,25 +22,29 @@ attributable to the method.
 
 | Arm | Status |
 |---|---|
-| Evaluation harness | Done (`eval/accuracy.py`); still to be updated for the GRPO prompt format |
-| Base model (control) | Measured with the original prompt; **will be re-measured** under the GRPO prompt |
+| Evaluation harness | Done (`eval/accuracy.py`); supports the old `####` prompt and the GRPO `<think>` + `\boxed{}` prompt |
+| Base model (control) | Measured with the old `####` prompt; the re-measurement under the GRPO prompt (test split) is pending |
 | SFT | Done. Underperformed the base model, so GRPO starts from the base instead |
-| GRPO | Training code written and unit-tested locally; not yet run on a GPU |
+| GRPO | 500-step pilot trained on an A40: score on training questions rose from about 47% to about 62%, but the `<think>` format was not learned. Held-out evaluation is pending. |
 | Distillation | Not started |
 | Latency and memory benchmark | Not started |
 
 ### Results so far
 
-GSM8K test set (1,319 questions), the original "`####`" instruction prompt, greedy decoding:
+Held-out accuracy, greedy decoding. **Only compare rows with the same prompt,
+split and max-new-tokens.**
 
-| Model | Accuracy |
-|---|---|
-| Qwen2.5-0.5B-Instruct (base) | 42.15% (556/1319) |
-| SFT v2 (LoRA, best checkpoint) | 33.66% (444/1319) |
+| Model | Prompt used at evaluation | Split | Accuracy |
+|---|---|---|---|
+| Qwen2.5-0.5B-Instruct (base) | old `####` instruction | test (1,319) | 42.15% (556/1319) |
+| SFT v2 (LoRA, best checkpoint) | old `####` instruction | test (1,319) | 33.66% (444/1319) |
+| Qwen2.5-0.5B-Instruct (base) | GRPO `<think>` + `\boxed{}` | test (1,319) | pending |
+| GRPO pilot (500 steps) | GRPO `<think>` + `\boxed{}` | test (1,319) | pending |
 
-GRPO is evaluated with a different prompt (`<think>` + `\boxed{}`), so its number
-is only comparable to the base model re-measured under that same prompt. See
-[`docs/results.md`](docs/results.md) for updates.
+The old 42.15% is not the baseline for GRPO. GRPO's baseline is the base model
+under the GRPO prompt (the third row). The full table, the comparison rules and
+the GRPO training curve are in [`docs/results.md`](docs/results.md) and
+[`models/grpo/grpo_result.md`](models/grpo/grpo_result.md).
 
 ## How GRPO is set up here
 
@@ -69,7 +73,7 @@ data/
   prepare_gsm8k.py       build the train / validation / test split and upload it
   verify_upload.py       check the uploaded split loads back correctly
 eval/
-  accuracy.py            evaluation harness (exact-match accuracy)
+  accuracy.py            evaluation harness (exact-match accuracy, both prompts)
 models/
   sft/                   SFT script, training guide, results
   grpo/
@@ -77,7 +81,8 @@ models/
     rewards.py           correctness and format reward functions
     train_grpo.py        GRPO training script
     grpo-hyperparameters.md
-    requirements.txt
+    grpo_result.md       reward functions and the pilot run, report by report
+    requirements.txt     pinned versions that passed the smoke test
 docs/
   project.md             problem statement and experiment design
   execution-plan.md      step-by-step plan and design decisions
@@ -109,6 +114,7 @@ python models/grpo/prompt.py      # prints the prompt and checks it
 **GRPO training (Linux + NVIDIA GPU; developed for a RunPod Pod):**
 
 ```bash
+python3 -m venv venv && source venv/bin/activate   # use a fresh venv: vLLM brings its own PyTorch
 pip install -r models/grpo/requirements.txt
 export HF_TOKEN=...
 
@@ -121,17 +127,24 @@ python models/grpo/train_grpo.py --full --resume /workspace/grpo_output/checkpoi
 `HUB_MODEL_ID` in `train_grpo.py` is where checkpoints are pushed. Change it to
 a repo you own.
 
-**Evaluation:** `eval/accuracy.py` (currently uses the original `####` prompt;
-it will gain the `<think>` + `\boxed{}` prompt style before GRPO is evaluated).
+**Evaluation:** `eval/accuracy.py` (written as Kaggle notebook cells). Set
+`PROMPT_STYLE = "think_boxed"` for the GRPO prompt (the default) or
+`"instruction"` for the old `####` prompt, `SPLIT = "validation"` or `"test"`,
+and for a LoRA model set `ADAPTER_REPO` and `ADAPTER_SUBFOLDER`
+(for the GRPO pilot: `sardakartik/qwen2.5-0.5b-gsm8k-grpo` and `final`). It
+reports accuracy, and for the GRPO prompt also strict accuracy, format rate,
+boxed rate, mean answer length and the share of truncated answers.
 
 ## Notes and caveats
 
-- The 42.15% and 33.66% numbers were measured with a different prompt than the
-  GRPO prompt. Prompt wording alone moved accuracy by about 10 points in our SFT
-  diagnostics ([`models/sft/sft_result.md`](models/sft/sft_result.md)), which
-  is why the base model is being re-measured under the GRPO prompt.
-- Package versions for the GRPO run are not pinned yet. They will be recorded in
-  `models/grpo/requirements.txt` after the first successful run.
+- The 42.15% and 33.66% numbers were measured with the old `####` prompt and a
+  512-token limit. Prompt wording alone moved accuracy by about 10 points in our
+  SFT diagnostics ([`models/sft/sft_result.md`](models/sft/sft_result.md)), so
+  they are not compared with anything measured under the GRPO prompt.
+- The GRPO correctness numbers in the training logs are scores on the
+  **training** questions, not held-out accuracy.
+- Package versions for the GRPO run are pinned in `models/grpo/requirements.txt`
+  (trl 1.19.0, vllm 0.34.0, peft 0.22.0, datasets 5.2.0, transformers 5.22.2).
 - The prompt text is locked before training starts and must not be edited
   afterwards, so training and evaluation see identical wording.
 

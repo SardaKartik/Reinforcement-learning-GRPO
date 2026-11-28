@@ -184,8 +184,8 @@ and accuracy comparisons are contaminated.
    pipeline.
 3. Distillation arm (Model 2) — reuse SFT pipeline, swap data source to
    teacher-generated rationales.
-4. GRPO arm (Model 3) — hardest; starts from Model (1), implement reward
-   function, use `trl.GRPOTrainer`.
+4. GRPO arm (Model 3) — hardest; starts from the base model (SFT scored
+   below base), implement reward function, use `trl.GRPOTrainer`.
 5. Run the full eval sweep (accuracy / cost / memory / latency) across all
    4 checkpoints and write up the trade-offs.
 

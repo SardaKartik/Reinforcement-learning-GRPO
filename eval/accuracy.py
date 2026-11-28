@@ -1,18 +1,33 @@
 """
-Evaluation harness: runs a given model/checkpoint on the held-out GSM8K
-test set and reports exact-match accuracy on the final numeric answer.
+Evaluation harness: runs a given model/checkpoint on held-out GSM8K questions
+(the TEST split by default; the validation split is for quick checks and for
+monitoring a training run) and reports exact-match accuracy on the final
+numeric answer.
 
-Same script is reused for every checkpoint (base, SFT, GRPO, Distillation)
-by changing MODEL_NAME below — this is what makes benchmark(0..3) a fair,
-apples-to-apples comparison.
+The same script is reused for every checkpoint (base, SFT, GRPO, Distillation)
+by changing the config in Cell 3 (MODEL_NAME, ADAPTER_REPO, ADAPTER_SUBFOLDER,
+SPLIT, PROMPT_STYLE).
+
+Two prompt styles matter for the comparison:
+  - "think_boxed" (the DEFAULT): the GRPO prompt, <think> ... </think> then
+    \\boxed{number}. Its text and answer rules are copied from
+    models/grpo/prompt.py and models/grpo/rewards.py and MUST stay identical
+    to them. Besides accuracy it reports strict accuracy (right AND full
+    format), format rate, boxed rate, mean answer length and truncated rate.
+  - "instruction": the old prompt ending in "#### <number>", which the SFT
+    model was trained with. Use it to evaluate SFT (and to reproduce the old
+    benchmark(0) numbers: SPLIT = "test", MAX_NEW_TOKENS = 512).
+
+Only compare numbers that share the same prompt style, split and
+MAX_NEW_TOKENS. Record every run in docs/results.md.
 
 This file is written to be copy-pasted into a Kaggle notebook, one
 "# Cell N" block per notebook cell (Kaggle already has torch/transformers
 pre-installed, so only a couple of extra packages need installing).
 
 Suggested Kaggle notebook name: "gsm8k-accuracy-eval"
-(use the same notebook for benchmark(0..3) — just change MODEL_NAME in
-Cell 3 and rerun, so results stay easy to find under one notebook name)
+(use the same notebook for every model — just change the config in Cell 3
+and rerun, so results stay easy to find under one notebook name)
 """
 
 # ============================================================
@@ -51,8 +66,8 @@ from peft import PeftModel
 # ============================================================
 HF_DATASET_REPO = "sardakartik/gsm8k-split"
 
-# MODEL_NAME is always the BASE/full model to load (unchanged behavior
-# from benchmark(0) — never a LoRA adapter repo).
+# MODEL_NAME is always the BASE/full model to load — never a LoRA adapter
+# repo.
 #   base / distilled -> "Qwen/Qwen2.5-0.5B-Instruct" (or the distilled
 #                        checkpoint, if it was pushed as a full model)
 #   SFT / GRPO        -> also "Qwen/Qwen2.5-0.5B-Instruct" — the actual
@@ -60,15 +75,26 @@ HF_DATASET_REPO = "sardakartik/gsm8k-split"
 #                        ADAPTER_REPO below instead, not here.
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 
-# Leave as None to evaluate a plain full model exactly like benchmark(0)
-# did (no code path changes for that case at all — see run_eval below).
-# Set to a LoRA adapter repo id (e.g. one of our SFT checkpoints) to
-# attach that adapter on top of MODEL_NAME before evaluating.
-#   e.g. "sardakartik/qwen2.5-0.5b-gsm8k-sft-epoch2"
-#     or "sardakartik/qwen2.5-0.5b-gsm8k-sft-epoch3"
+# Leave as None to evaluate the plain base/full model (no adapter code runs
+# at all — see run_eval below). Set to a LoRA adapter repo id to attach that
+# adapter on top of MODEL_NAME before evaluating.
+#   SFT:  "sardakartik/qwen2.5-0.5b-gsm8k-sft-epoch2"  (or ...-epoch3)
+#         -> evaluate with PROMPT_STYLE = "instruction" (its training prompt)
+#   GRPO: "sardakartik/qwen2.5-0.5b-gsm8k-grpo" with ADAPTER_SUBFOLDER = "final"
+#         -> evaluate with PROMPT_STYLE = "think_boxed"
 ADAPTER_REPO = None
 
-MAX_NEW_TOKENS = 512  # enough room for a full step-by-step solution
+# Folder inside ADAPTER_REPO that holds the adapter files. Leave None when
+# the adapter is at the top level of the repo (the SFT repos). For our GRPO
+# repo use "final": that folder holds the adapter from the end of training.
+#   GRPO pilot: ADAPTER_REPO = "sardakartik/qwen2.5-0.5b-gsm8k-grpo"
+#               ADAPTER_SUBFOLDER = "final"
+ADAPTER_SUBFOLDER = None
+
+# 1024 = the same limit GRPO used during training, so an answer is not cut
+# off earlier at evaluation than in training. The old runs (benchmark(0), SFT)
+# used 512. Use the SAME value for every model you compare.
+MAX_NEW_TOKENS = 1024
 
 # Number of questions sent to the GPU together in one generate() call.
 # Generating one question at a time leaves most of the GPU idle (it's
@@ -79,26 +105,35 @@ MAX_NEW_TOKENS = 512  # enough room for a full step-by-step solution
 BATCH_SIZE = 8
 
 # --- Diagnostic knobs -------------------------------------------------
-# All four default to the ORIGINAL benchmark behavior (test set, with the
-# instruction prompt, every question, nothing saved), so leaving them
-# alone reproduces benchmark(0) exactly. They exist so we can run
-# controlled experiments by changing one line between runs.
+# They exist so we can run controlled experiments by changing one line
+# between runs. The defaults below are set up for the GRPO comparison:
+# test split + the GRPO prompt ("think_boxed") + 1024 new tokens. To
+# reproduce the original benchmark(0) run instead, use
+# PROMPT_STYLE = "instruction" and MAX_NEW_TOKENS = 512 (the split is already
+# "test").
 
-# Which split to evaluate on: "test" (final reported numbers) or
-# "validation" (use this for diagnosing/making decisions, so we don't tune
-# against the test set).
+# Which split to evaluate on: "test" (the base-vs-GRPO comparison and the
+# final numbers, 1,319 questions) or "validation" (748 questions; for quick
+# checks and for choosing between options). Use the SAME split for every
+# model you compare, and note in the report that the test set is shared by
+# more than one GRPO model.
 SPLIT = "test"
 
-# "instruction": question + "Solve step by step... #### <number>" (the
-#                original eval prompt).
-# "bare":        the question only, exactly what SFT saw during training.
-PROMPT_STYLE = "instruction"
+# "think_boxed": the GRPO prompt (<think> ... </think> then \boxed{}), the
+#                same text as models/grpo/prompt.py. Answers are read with
+#                the same rule as the GRPO correctness reward. Use this for
+#                the base model and the GRPO model.
+# "instruction": question + "Solve step by step... #### <number>" (the old
+#                eval prompt, also the one the SFT model was trained with).
+# "bare":        the question only (a diagnostic style from the SFT
+#                investigation; not used for the main comparison).
+PROMPT_STYLE = "think_boxed"
 
 # Evaluate only the first N questions of the split (None = all of them).
 # Use the same N for every run you want to compare.
 NUM_EXAMPLES = None
 
-# If set (e.g. "/kaggle/working/base_instruction_val300.jsonl"), every
+# If set (e.g. "/kaggle/working/base_think_boxed_val.jsonl"), every
 # generated answer is written to this file as it's produced (question,
 # ground truth, predicted answer, correct?, full generated text) so we can
 # analyze answer length / patterns afterward without re-running.
@@ -156,6 +191,49 @@ def answers_match(predicted, ground_truth):
         return predicted == ground_truth
 
 
+# ---- GRPO prompt and answer rules -------------------------------------
+# MUST match models/grpo/prompt.py and models/grpo/rewards.py exactly:
+# training and evaluation have to see the same prompt and read answers the
+# same way. If you change any of this, change it there too (and retrain).
+GRPO_PROMPT_TEMPLATE = (
+    "{question}\n\n"
+    "Think through the problem step by step inside <think> </think> tags. "
+    "After </think>, give the final answer as a number inside \\boxed{}.\n"
+    "Format: <think> your reasoning </think> The answer is \\boxed{number}"
+)
+
+GRPO_NUMBER = r"-?\d[\d,]*\.?\d*"
+BOXED = re.compile(r"\\boxed\{((?:[^{}]|\{[^{}]*\})*)\}")
+FORMAT = re.compile(r"<think>.*?</think>.*?\\boxed\{.+?\}", re.DOTALL)
+
+
+def grpo_last_number(s):
+    """Last number in a string (as text), or None."""
+    nums = re.findall(GRPO_NUMBER, s.replace("$", ""))
+    return nums[-1].replace(",", "") if nums else None
+
+
+def extract_final_answer(text):
+    """Look only after the last </think>; last \\boxed{...}; else the last number."""
+    tail = text.split("</think>")[-1] if "</think>" in text else text
+    boxed = BOXED.findall(tail)
+    if boxed:
+        return grpo_last_number(boxed[-1])
+    return grpo_last_number(tail)
+
+
+def has_boxed(text):
+    """True if there is a \\boxed{...} after the last </think> (or anywhere if no </think>)."""
+    tail = text.split("</think>")[-1] if "</think>" in text else text
+    return BOXED.search(tail) is not None
+
+
+def has_format(text):
+    """True only for exactly one <think>...</think>, then a non-empty \\boxed{...}."""
+    one_pair = text.count("<think>") == 1 and text.count("</think>") == 1
+    return one_pair and FORMAT.search(text) is not None
+
+
 def build_prompt(tokenizer, question, style="instruction"):
     """
     Wrap the raw GSM8K question in a chat-template prompt.
@@ -180,8 +258,13 @@ def build_prompt(tokenizer, question, style="instruction"):
         )
     elif style == "bare":
         content = question
+    elif style == "think_boxed":
+        # .replace, not .format: the template contains curly braces (\boxed{}).
+        content = GRPO_PROMPT_TEMPLATE.replace("{question}", question)
     else:
-        raise ValueError(f"Unknown prompt style: {style!r} (use 'instruction' or 'bare')")
+        raise ValueError(
+            f"Unknown prompt style: {style!r} (use 'instruction', 'bare' or 'think_boxed')"
+        )
 
     messages = [{"role": "user", "content": content}]
     return tokenizer.apply_chat_template(
@@ -201,6 +284,7 @@ def run_eval(
     prompt_style="instruction",
     num_examples=None,
     save_outputs_path=None,
+    adapter_subfolder=None,
 ):
     # Load HF_TOKEN from .env so we can pull the private test set.
     load_dotenv()
@@ -242,12 +326,17 @@ def run_eval(
     # unchanged from the original base-model benchmark. Only pass
     # adapter_repo when evaluating a LoRA checkpoint (e.g. SFT/GRPO).
     if adapter_repo:
-        print(f"Attaching LoRA adapter from {adapter_repo} ...")
-        model = PeftModel.from_pretrained(model, adapter_repo)
+        print(f"Attaching LoRA adapter from {adapter_repo} (subfolder: {adapter_subfolder}) ...")
+        model = PeftModel.from_pretrained(model, adapter_repo, subfolder=adapter_subfolder)
 
     print(f"Model loaded on device: {model.device}")
 
     correct = 0
+    strict_correct = 0   # right answer AND the full <think>...</think> + \boxed{} format
+    format_ok = 0        # outputs with the full format
+    boxed_ok = 0         # outputs with a \boxed{...}
+    truncated = 0        # outputs that used all MAX_NEW_TOKENS (probably cut off)
+    total_tokens = 0     # sum of generated lengths, for the mean
     start_time = time.time()
 
     # Opt-in: stream every generated answer to a .jsonl file as we go (one
@@ -291,11 +380,23 @@ def run_eval(
         input_len = inputs["input_ids"].shape[1]
 
         for j, (question, answer) in enumerate(zip(questions, answers)):
-            generated_text = tokenizer.decode(
-                outputs[j][input_len:], skip_special_tokens=True
-            )
+            gen_ids = outputs[j][input_len:]
+            generated_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+            gen_len = int((gen_ids != tokenizer.pad_token_id).sum())  # tokens actually written
+            total_tokens += gen_len
+            if gen_len >= MAX_NEW_TOKENS:
+                truncated += 1
 
-            predicted = extract_predicted_answer(generated_text)
+            if prompt_style == "think_boxed":
+                # The same answer rule the GRPO correctness reward used in training.
+                predicted = extract_final_answer(generated_text)
+                fmt = has_format(generated_text)
+                format_ok += fmt
+                boxed_ok += has_boxed(generated_text)
+            else:
+                predicted = extract_predicted_answer(generated_text)
+                fmt = False
+
             ground_truth = extract_ground_truth(answer)
 
             # Numeric comparison (not strict string equality) — see
@@ -303,6 +404,8 @@ def run_eval(
             is_correct = answers_match(predicted, ground_truth)
             if is_correct:
                 correct += 1
+                if fmt:
+                    strict_correct += 1
 
             if out_file:
                 out_file.write(
@@ -312,6 +415,8 @@ def run_eval(
                             "ground_truth": ground_truth,
                             "predicted": predicted,
                             "correct": is_correct,
+                            "format_ok": fmt,
+                            "gen_tokens": gen_len,
                             "generated_text": generated_text,
                         }
                     )
@@ -342,6 +447,10 @@ def run_eval(
     print(f"Model: {model_label}")
     print(f"Split: {split} | prompt style: {prompt_style} | examples: {total}")
     print(f"Accuracy: {accuracy:.2f}% ({correct}/{total})")
+    if prompt_style == "think_boxed":
+        print(f"Strict accuracy (right AND full format): {strict_correct / total * 100:.2f}%")
+        print(f"Format rate: {format_ok / total * 100:.2f}% | boxed rate: {boxed_ok / total * 100:.2f}%")
+    print(f"Mean answer length: {total_tokens / total:.0f} tokens | truncated: {truncated / total * 100:.2f}%")
     print(f"Total eval time: {elapsed:.1f}s")
 
 
@@ -356,4 +465,5 @@ if __name__ == "__main__":
         prompt_style=PROMPT_STYLE,
         num_examples=NUM_EXAMPLES,
         save_outputs_path=SAVE_OUTPUTS_PATH,
+        adapter_subfolder=ADAPTER_SUBFOLDER,
     )
