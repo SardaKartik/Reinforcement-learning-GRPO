@@ -24,7 +24,9 @@ from rewards import correctness_reward,format_reward
 # ---- Names ------------------------------------------------------------------
 MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"      # base model (NOT the SFT checkpoint)
 DATASET_REPO = "sardakartik/gsm8k-split"       # private GSM8K split on Hugging Face
-HUB_MODEL_ID = "sardakartik/qwen2.5-0.5b-gsm8k-grpo"   # PROPOSED name, not confirmed
+# The pilot adapter lives in "sardakartik/qwen2.5-0.5b-gsm8k-grpo" (evaluated at
+# 52.62%). The full run uses a NEW repo so the pilot is never overwritten.
+HUB_MODEL_ID = "sardakartik/qwen2.5-0.5b-gsm8k-grpo-full"
 OUTPUT_DIR = "/workspace/grpo_output"          # /workspace survives a Pod stop
 
 # ---- Run lengths ------------------------------------------------------------
@@ -143,7 +145,8 @@ def make_grpo_config(max_steps,push):
         reward_weights=[1.0, 0.2],
 
         # -------- run length,saving,logging --------------------------------------
-        max_steps=max_steps,
+        num_train_epochs=1,                # --full = ONE epoch (TRL's default is 3)
+        max_steps=max_steps,               # when >0 it overrides the epochs
         save_strategy="steps",
         save_steps=24,
         save_total_limit=3,
