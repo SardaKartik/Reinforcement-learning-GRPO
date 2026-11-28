@@ -10,8 +10,8 @@ from one group must not be read against a number from another group.
 |---|---|---|---|---|---|---|
 | Qwen2.5-0.5B-Instruct (base) | old `####` instruction | test (1,319) | 512 | 42.15% (556/1319) | n/a | measured |
 | SFT v2 (LoRA, best checkpoint) | old `####` instruction (the prompt it was trained with) | test (1,319) | 512 | 33.66% (444/1319) | n/a | measured |
-| Qwen2.5-0.5B-Instruct (base) | GRPO `<think>` + `\boxed{}` | test (1,319) | 1024 | _todo_ | _todo_ | pending (Kaggle run) |
-| GRPO pilot (500 steps) | GRPO `<think>` + `\boxed{}` | test (1,319) | 1024 | _todo_ | _todo_ | pending (Kaggle run) |
+| Qwen2.5-0.5B-Instruct (base) | GRPO `<think>` + `\boxed{}` | test (1,319) | 1024 | 43.29% (571/1319) | 0.00% (boxed 95.98%) | measured |
+| GRPO pilot (500 steps) | GRPO `<think>` + `\boxed{}` | test (1,319) | 1024 | **52.62% (694/1319)** | 0.00% (boxed 99.85%) | measured |
 | GRPO, next training run (validation monitored during training) | GRPO `<think>` + `\boxed{}` | test (1,319) | 1024 | _todo_ | _todo_ | not started |
 | Distilled | its own training prompt | test (1,319) | _tbd_ | _todo_ | n/a | not started |
 
@@ -20,7 +20,7 @@ from one group must not be read against a number from another group.
 - **Rows 1 and 2** (old `####` prompt, test split): base vs SFT. SFT scored
   lower than the base model, which is why GRPO starts from the base model.
 - **Rows 3 and 4** (GRPO prompt, test split): base vs the GRPO pilot. This is
-  the first held-out measure of what GRPO training did.
+  the first held-out measure of what GRPO training did: 43.29% to 52.62%.
 - **Row 5** is compared with row 3 (the same base-model baseline).
 - The old 42.15% is **not** the baseline for GRPO. The baseline for GRPO is the
   base model measured under the GRPO prompt (row 3).
@@ -28,6 +28,56 @@ from one group must not be read against a number from another group.
 Each fine-tuned model is evaluated with the prompt it was trained with. Using a
 different prompt than the one a model was trained on cost the first SFT
 version about 10 points.
+
+## Base model under the GRPO prompt (details)
+
+Greedy decoding, test split, 1,024 new tokens, Kaggle T4, batch size 8:
+
+| Metric | Value |
+|---|---|
+| Accuracy | 43.29% (571/1319) |
+| Strict accuracy (right AND full format) | 0.00% |
+| Format rate (`<think>...</think>` + `\boxed{}`) | 0.00% |
+| `\boxed{}` rate | 95.98% |
+| Mean answer length | 310 tokens |
+| Truncated (hit the 1,024 limit) | 0.38% |
+| Eval time | 3,493 s (about 58 min) |
+
+Reading: the base model solves about 43% of the test questions, writes a
+`\boxed{}` almost every time, and never writes the `<think>` tags. With 1,319
+questions the statistical noise is about +/- 1.4 points (one standard error),
+so a difference of less than about 3 points between two models should not be
+treated as real. Per-question outputs were not saved for this run.
+
+## GRPO pilot vs base (same prompt, test split, greedy, 1,024 tokens)
+
+| Metric | Base | GRPO pilot (500 steps) | Change |
+|---|---|---|---|
+| Accuracy | 43.29% (571/1319) | **52.62% (694/1319)** | +9.33 points (+123 questions) |
+| Strict accuracy | 0.00% | 0.00% | none |
+| Format rate | 0.00% | 0.00% | none |
+| `\boxed{}` rate | 95.98% | 99.85% | +3.87 points |
+| Mean answer length | 310 tokens | 286 tokens | -24 |
+| Truncated (hit 1,024) | 0.38% | 0.15% | -0.23 points |
+| Eval time (Kaggle T4) | 3,493 s | 5,599 s | |
+
+Adapter: `sardakartik/qwen2.5-0.5b-gsm8k-grpo`, subfolder `final`. Per-question
+outputs of the pilot run were saved on Kaggle
+(`grpo_pilot_think_boxed_test.jsonl`).
+
+Reading:
+- The gap is about 4-5 standard errors (noise is about +/- 1.4 points per
+  model), so the improvement is real, not noise.
+- It transfers to unseen questions: about 47% to 62% on training questions
+  (sampled), 43% to 53% on test (greedy). The held-out gain is smaller, as
+  expected.
+- The gain comes from the correctness reward. The `<think>` format was never
+  learned (0% before and after), so the +0.2 format reward had no effect. The
+  correctness check falls back to the last number when there is no `\boxed{}`,
+  so the +3.9-point boxed rate does not by itself explain the gain.
+- Caveats: one run, one seed; the same test set will be used for later GRPO
+  models; the pilot did not show that GRPO teaches `<think>` reasoning, only
+  that accuracy improved.
 
 ## How the splits are used
 

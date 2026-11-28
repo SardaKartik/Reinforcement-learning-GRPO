@@ -162,17 +162,18 @@ points of noise per block.
 | First Pod | 4.5 s | 14.97 GB | 0.417 | 0 | 0 |
 | Second Pod (pinned versions) | 4.56 s | 15.12 GB | 0.385 | 0 | 0 |
 
-## Held-out evaluation (to be filled)
+## Held-out evaluation
 
-Not measured yet. Plan: compare the base model and the pilot adapter on the
-test split (1,319 questions, greedy decoding, the GRPO prompt, 1,024 new
-tokens). The validation split is planned to be passed to the trainer in the
+Both the base model and the pilot adapter are measured on the test split
+(1,319 questions, greedy decoding, the GRPO prompt, 1,024 new tokens): the pilot
+scores 52.62% vs 43.29% for the base (+9.33 points, about 4-5 standard errors).
+Details are in `docs/results.md`. The validation split is planned to be passed to the trainer in the
 next GRPO run to monitor progress during training. Note for the report: the same
 test set is used for more than one GRPO model. The up-to-date table is in
 `docs/results.md`.
 
 | Model | Prompt | Split | Accuracy | Format rate | Notes |
 |---|---|---|---|---|---|
-| Base (re-measured) | GRPO prompt | test | _todo_ | _todo_ | |
-| GRPO pilot adapter | GRPO prompt | test | _todo_ | _todo_ | |
+| Base (re-measured) | GRPO prompt | test | 43.29% (571/1319) | 0.00% (boxed 95.98%) | greedy, 1,024 tokens, mean length 310, truncated 0.38% |
+| GRPO pilot adapter | GRPO prompt | test | **52.62% (694/1319)** | 0.00% (boxed 99.85%) | greedy, 1,024 tokens, mean length 286, truncated 0.15%, eval 5,599 s |
 | Base (old measurement) | `####` prompt | test | 42.15% (556/1319) | n/a | different prompt, not comparable |

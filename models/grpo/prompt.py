@@ -105,7 +105,7 @@
 # STATUS: eval/accuracy.py now supports this prompt (PROMPT_STYLE =
 # "think_boxed") and reads answers with the same rule as rewards.py. The runs
 # themselves (base, then the GRPO pilot adapter, on the test split) are
-# pending; results are recorded in docs/results.md.
+# done; results are recorded in docs/results.md.
 #
 # Reported for each model:
 #   - accuracy under THIS prompt,
@@ -143,9 +143,10 @@
 # [x] Add a matching "think_boxed" prompt style and \boxed{} extraction to
 #     eval/accuracy.py (done; also reports strict accuracy, format rate,
 #     boxed rate, mean length and truncated rate).
-# [ ] Run the BASE model under this prompt on the test split = the baseline
-#     for GRPO, then the GRPO pilot adapter on the same split. Pending
-#     (Kaggle).
+# [x] BASE model under this prompt on the test split = the baseline for GRPO:
+#     43.29% (571/1319), format rate 0%, boxed rate 95.98% (docs/results.md).
+# [x] GRPO pilot adapter on the same split: 52.62% (694/1319), format rate 0%,
+#     boxed rate 99.85% (docs/results.md). +9.33 points over the base.
 # [x] Write the GRPO reward function: separate correctness check (reads
 #     \boxed{} or last number, independent of tags) and format check
 #     (<think>...</think> then \boxed{}), weights 1.0 and 0.2.

@@ -23,9 +23,9 @@ attributable to the method.
 | Arm | Status |
 |---|---|
 | Evaluation harness | Done (`eval/accuracy.py`); supports the old `####` prompt and the GRPO `<think>` + `\boxed{}` prompt |
-| Base model (control) | Measured with the old `####` prompt; the re-measurement under the GRPO prompt (test split) is pending |
+| Base model (control) | Measured with the old `####` prompt (42.15%) and under the GRPO prompt (43.29% on test, `<think>` format never used) |
 | SFT | Done. Underperformed the base model, so GRPO starts from the base instead |
-| GRPO | 500-step pilot trained on an A40: score on training questions rose from about 47% to about 62%, but the `<think>` format was not learned. Held-out evaluation is pending. |
+| GRPO | 500-step pilot trained on an A40: score on training questions rose from about 47% to about 62%, but the `<think>` format was not learned. On the test set it scored **52.62%** vs 43.29% for the base model (+9.3 points). |
 | Distillation | Not started |
 | Latency and memory benchmark | Not started |
 
@@ -38,8 +38,8 @@ split and max-new-tokens.**
 |---|---|---|---|
 | Qwen2.5-0.5B-Instruct (base) | old `####` instruction | test (1,319) | 42.15% (556/1319) |
 | SFT v2 (LoRA, best checkpoint) | old `####` instruction | test (1,319) | 33.66% (444/1319) |
-| Qwen2.5-0.5B-Instruct (base) | GRPO `<think>` + `\boxed{}` | test (1,319) | pending |
-| GRPO pilot (500 steps) | GRPO `<think>` + `\boxed{}` | test (1,319) | pending |
+| Qwen2.5-0.5B-Instruct (base) | GRPO `<think>` + `\boxed{}` | test (1,319) | 43.29% (571/1319) |
+| GRPO pilot (500 steps) | GRPO `<think>` + `\boxed{}` | test (1,319) | **52.62% (694/1319)** |
 
 The old 42.15% is not the baseline for GRPO. GRPO's baseline is the base model
 under the GRPO prompt (the third row). The full table, the comparison rules and

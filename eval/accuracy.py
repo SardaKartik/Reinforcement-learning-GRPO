@@ -82,14 +82,15 @@ MODEL_NAME = "Qwen/Qwen2.5-0.5B-Instruct"
 #         -> evaluate with PROMPT_STYLE = "instruction" (its training prompt)
 #   GRPO: "sardakartik/qwen2.5-0.5b-gsm8k-grpo" with ADAPTER_SUBFOLDER = "final"
 #         -> evaluate with PROMPT_STYLE = "think_boxed"
-ADAPTER_REPO = None
+# CURRENT RUN: the GRPO pilot adapter. Set back to None for the base-model run.
+ADAPTER_REPO = "sardakartik/qwen2.5-0.5b-gsm8k-grpo"
 
 # Folder inside ADAPTER_REPO that holds the adapter files. Leave None when
 # the adapter is at the top level of the repo (the SFT repos). For our GRPO
 # repo use "final": that folder holds the adapter from the end of training.
 #   GRPO pilot: ADAPTER_REPO = "sardakartik/qwen2.5-0.5b-gsm8k-grpo"
 #               ADAPTER_SUBFOLDER = "final"
-ADAPTER_SUBFOLDER = None
+ADAPTER_SUBFOLDER = "final"   # CURRENT RUN: GRPO pilot. Use None for the base model / SFT.
 
 # 1024 = the same limit GRPO used during training, so an answer is not cut
 # off earlier at evaluation than in training. The old runs (benchmark(0), SFT)
@@ -131,13 +132,17 @@ PROMPT_STYLE = "think_boxed"
 
 # Evaluate only the first N questions of the split (None = all of them).
 # Use the same N for every run you want to compare.
+# CURRENT RUN: None = the full test set (1,319 questions, about an hour on a
+# Kaggle T4). Use 16 for a quick sanity check that an adapter loads.
 NUM_EXAMPLES = None
 
 # If set (e.g. "/kaggle/working/base_think_boxed_val.jsonl"), every
 # generated answer is written to this file as it's produced (question,
 # ground truth, predicted answer, correct?, full generated text) so we can
 # analyze answer length / patterns afterward without re-running.
-SAVE_OUTPUTS_PATH = None
+# CURRENT RUN: save the answers so they can be studied afterwards. Use a new
+# file name for every run.
+SAVE_OUTPUTS_PATH = "/kaggle/working/grpo_pilot_think_boxed_test.jsonl"
 
 # ============================================================
 # Cell 4 — Helper functions: parsing answers + building the prompt

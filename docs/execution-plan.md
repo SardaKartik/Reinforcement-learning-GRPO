@@ -29,7 +29,7 @@ from `project.md`. Update this file as decisions get locked in or revised.
 | GRPO batch size / accumulation | `per_device_train_batch_size = 8`, `gradient_accumulation_steps = 4` → 32 attempts = 4 questions per step (see "GRPO Final Config") | Locked |
 | GRPO saving / pushing | `save_steps = 24`, `save_total_limit = 3`, push to a PRIVATE Hub repo with `hub_strategy = "checkpoint"` | Locked (repo name still to confirm) |
 | GRPO output format | `<think>...</think>` reasoning, then the final answer as `\boxed{number}` ("Option B"; exact prompt text in `models/grpo/prompt.py`). Correctness is read from `\boxed{}` / last number independent of the tags; the format reward is a separate check. | Locked |
-| Baseline re-measure | Re-run the BASE model under the Option B prompt on the TEST split and compare the GRPO pilot (and later the final GRPO model) against that new baseline, not the old 42.15% "####"-prompt number. The validation split is planned to be passed to the trainer in the next GRPO run to monitor progress during training. `eval/accuracy.py` now supports this (`PROMPT_STYLE = "think_boxed"`, 1,024 new tokens); the Kaggle runs are pending. All results go in `docs/results.md`. | Required (harness updated; runs pending) |
+| Baseline re-measure | Re-run the BASE model under the Option B prompt on the TEST split and compare the GRPO pilot (and later the final GRPO model) against that new baseline, not the old 42.15% "####"-prompt number. The validation split is planned to be passed to the trainer in the next GRPO run to monitor progress during training. `eval/accuracy.py` now supports this (`PROMPT_STYLE = "think_boxed"`, 1,024 new tokens); both Kaggle runs are done (base 43.29%, pilot 52.62%). All results go in `docs/results.md`. | Required (done for base and pilot) |
 | GRPO starting point | The **base** Qwen2.5-0.5B-Instruct, NOT the SFT checkpoint (SFT scored below base on the validation diagnostics, see `models/sft/sft_result.md`) | Locked |
 
 ---
@@ -78,9 +78,13 @@ baseline numbers exist for comparison.
       Hub subfolder, and extra metrics (strict accuracy, format rate, boxed rate,
       mean length, truncated rate). The old `instruction` style is kept so SFT
       can still be evaluated with the prompt it was trained on.
-- [ ] Run the **base model** under the GRPO prompt on the test split (the
-      baseline for GRPO), then the GRPO pilot adapter on the same split. Note
-      in the report that the same test set is used for more than one GRPO
+- [x] Run the **base model** under the GRPO prompt on the test split (the
+      baseline for GRPO): **43.29%** (571/1,319), format rate 0%, boxed rate
+      95.98%, mean length 310 tokens, about 58 min on a Kaggle T4.
+- [x] Run the GRPO pilot adapter on the same split with the same settings:
+      **52.62%** (694/1,319), format rate 0%, boxed rate 99.85%, mean length
+      286 tokens, about 93 min on a Kaggle T4 (+9.33 points over the base).
+      Note in the report that the same test set is used for more than one GRPO
       model.
 
 ---
